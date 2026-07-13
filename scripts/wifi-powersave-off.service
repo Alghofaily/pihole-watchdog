@@ -1,0 +1,10 @@
+[Unit]
+Description=Disable WiFi power management
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/iwconfig WIFI_INTERFACE_PLACEHOLDER power off
+
+[Install]
+WantedBy=multi-user.target
