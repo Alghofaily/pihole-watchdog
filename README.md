@@ -21,19 +21,28 @@ Built after chasing down exactly this problem on a Pi Zero 2 W: Pi-hole would fr
 ## Install
 
 ```bash
-git clone https://github.com/alghofaily/pihole-watchdog.git
+git clone https://github.com/Alghofaily/pihole-watchdog.git
 cd pihole-watchdog
-sudo ./install.sh
+sudo ./setup.sh
 ```
 
-The installer will:
-1. Install any missing dependencies (`dnsutils`, `iputils-ping`, `wireless-tools`)
+`setup.sh` handles everything in one command: sets executable permissions, runs the installer, and runs verification at the end so you immediately see a pass/fail report.
+
+The installer (`install.sh`) will:
+1. Install any missing dependencies (`dnsutils`, `iputils-ping`, `wireless-tools`, `curl`)
 2. Install the watchdog script to `/usr/local/bin/network-watchdog.sh`
 3. Detect your WiFi interface and disable power management on it (skipped on Ethernet-only setups)
 4. Add the watchdog cron job
 5. Set up log rotation
 
-It's idempotent — safe to re-run if you want to reinstall or update.
+It's idempotent — safe to re-run `setup.sh` any time you want to reinstall, update, or re-verify.
+
+Prefer to run the steps individually? You still can:
+```bash
+chmod +x install.sh uninstall.sh verify.sh scripts/network-watchdog.sh
+sudo ./install.sh
+sudo ./verify.sh
+```
 
 ## Uninstall
 
