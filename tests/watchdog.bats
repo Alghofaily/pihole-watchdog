@@ -4,8 +4,8 @@
 #
 # Strategy: run the real script but inject fake `ip`, `ping`, `dig`, `curl`,
 # `systemctl`, and `reboot` via PATH, and redirect all state to a temp dir via
-# the script's environment overrides. This lets us drive every branch of the
-# escalation logic without touching the network or rebooting anything.
+# the script's environment overrides. This drives every branch of the escalation
+# and alerting logic without touching the network or rebooting anything.
 
 setup() {
     SCRIPT="${BATS_TEST_DIRNAME}/../scripts/network-watchdog.sh"
@@ -20,12 +20,15 @@ setup() {
     export CONFIG_FILE="$TMP/none.conf"   # ensure no real /etc config is sourced
     export REBOOT_COOLDOWN=1800
     export REBOOT_CMD="$BIN/reboot"       # intercept reboot instead of /sbin/reboot
+    export DISK_WARN_PCT=101              # never trip the disk check in tests
+    export NOTIFY_CMD='printf "%s\n" "$MSG" >> '"$TMP"'/notify.log'
+    export HEARTBEAT_URL="http://heartbeat.local/ping"
 
     # Default fakes: everything healthy. Individual tests override these.
     make_fake ip 'echo "default via 192.168.1.1 dev wlan0"'
     make_fake ping 'exit 0'
-    make_fake dig 'exit 0'
-    make_fake curl 'exit 0'
+    make_fake dig 'echo "status: NOERROR"; exit 0'
+    make_fake curl "echo \"curl \$*\" >> \"$TMP/curl.log\"; exit 0"
     make_fake systemctl "echo \"systemctl \$*\" >> \"$TMP/systemctl.log\"; exit 0"
     make_fake reboot "echo rebooted >> \"$TMP/reboot.log\"; exit 0"
 
@@ -36,7 +39,6 @@ teardown() {
     rm -rf "$TMP"
 }
 
-# make_fake <name> <body> : create an executable stub on PATH
 make_fake() {
     local name="$1" body="$2"
     cat > "$BIN/$name" <<EOF
@@ -46,11 +48,13 @@ EOF
     chmod +x "$BIN/$name"
 }
 
-@test "logs all-OK and does not reboot when everything is healthy" {
+@test "healthy run: logs all OK, pings heartbeat, no reboot, no notify" {
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
     grep -q "all OK" "$LOGFILE"
+    grep -q "heartbeat.local/ping" "$TMP/curl.log"
     [ ! -f "$TMP/reboot.log" ]
+    [ ! -f "$TMP/notify.log" ]
 }
 
 @test "exits cleanly if no default gateway can be determined" {
@@ -60,40 +64,57 @@ EOF
     grep -q "Could not determine default gateway" "$LOGFILE"
 }
 
-@test "restarts pihole-FTL when DNS fails, and recovers without reboot" {
-    # dig fails on the first call, succeeds on the second (post-restart).
-    make_fake dig 'f="'"$TMP"'/dig.n"; n=$(cat "$f" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$f"; [ $n -ge 2 ]'
+@test "DNS fails once: restarts pihole-FTL, recovers, notifies, no reboot" {
+    make_fake dig 'for a in "$@"; do case "$a" in wd-*) echo "status: NOERROR"; exit 0;; esac; done; f="'"$TMP"'/dig.n"; n=$(cat "$f" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$f"; [ $n -ge 2 ]'
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    grep -q "restart pihole-FTL" "$LOGFILE"
-    grep -q "Recovered after pihole-FTL restart" "$LOGFILE"
     grep -q "systemctl restart pihole-FTL" "$TMP/systemctl.log"
+    grep -q "recovered after restarting pihole-FTL" "$TMP/notify.log"
     [ ! -f "$TMP/reboot.log" ]
 }
 
-@test "reboots when the gateway stays unreachable after a network restart" {
+@test "gateway stays down: reboots and notifies" {
     make_fake ping 'exit 1'
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    grep -q "Rebooting now" "$LOGFILE"
+    grep -q "Rebooting now" "$TMP/notify.log"
     [ -f "$TMP/reboot.log" ]
+    # reboot path exits before heartbeat -> no ping
+    ! grep -q "heartbeat.local/ping" "$TMP/curl.log"
 }
 
-@test "suppresses reboot when a recent reboot is within the cooldown window" {
+@test "gateway down within cooldown: reboot suppressed and notified" {
     make_fake ping 'exit 1'
     mkdir -p "$STATEDIR"
-    date +%s > "$STATEFILE"   # "just rebooted"
+    date +%s > "$STATEFILE"
     run bash "$SCRIPT"
     [ "$status" -eq 0 ]
-    grep -q "Reboot suppressed" "$LOGFILE"
+    grep -q "Reboot suppressed" "$TMP/notify.log"
     [ ! -f "$TMP/reboot.log" ]
 }
 
-@test "allows reboot when the last reboot is older than the cooldown" {
+@test "gateway down, cooldown expired: reboots" {
     make_fake ping 'exit 1'
     mkdir -p "$STATEDIR"
-    echo $(( $(date +%s) - 2000 )) > "$STATEFILE"   # older than 1800s
+    echo $(( $(date +%s) - 2000 )) > "$STATEFILE"
     run bash "$SCRIPT"
-    grep -q "Rebooting now" "$LOGFILE"
     [ -f "$TMP/reboot.log" ]
+}
+
+@test "upstream DNS dead but FTL up: alerts, does not reboot" {
+    # cached check passes, but the random upstream probe (label wd-*) SERVFAILs.
+    make_fake dig 'for a in "$@"; do case "$a" in wd-*) echo "status: SERVFAIL"; exit 0;; esac; done; echo "status: NOERROR"; exit 0'
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ]
+    grep -q "UPSTREAM resolution is failing" "$TMP/notify.log"
+    [ ! -f "$TMP/reboot.log" ]
+}
+
+@test "low disk space: alerts (no reboot)" {
+    export DISK_WARN_PCT=10
+    make_fake df 'echo "Filesystem 1K Used Avail Use% Mounted"; echo "/dev/root 100 95 5 95% /"'
+    make_fake dig 'echo "status: NOERROR"; exit 0'   # keep upstream healthy to isolate the disk alert
+    run bash "$SCRIPT"
+    grep -q "Disk usage on / is 95%" "$TMP/notify.log"
+    [ ! -f "$TMP/reboot.log" ]
 }

@@ -41,6 +41,16 @@ if [ -f /etc/systemd/system/wifi-powersave-off.service ]; then
     echo "  Done (note: WiFi power management will re-enable on next reboot)"
 fi
 
+if [ -f /etc/systemd/system.conf.d/watchdog.conf ]; then
+    echo "Removing hardware watchdog config..."
+    rm -f /etc/systemd/system.conf.d/watchdog.conf
+    for c in /boot/firmware/config.txt /boot/config.txt; do
+        [ -f "$c" ] && sed -i '/^dtparam=watchdog=on/d' "$c"
+    done
+    systemctl daemon-reexec 2>/dev/null || true
+    echo "  Done (hardware watchdog fully off after next reboot)"
+fi
+
 echo
 read -p "Delete the log file /var/log/network-watchdog.log too? [y/N] " -n 1 -r
 echo

@@ -12,6 +12,9 @@ Built after chasing down exactly this problem on a Pi Zero 2 W: Pi-hole would fr
 | **Tiered watchdog** | Runs every 10 minutes. Checks gateway reachability, DNS resolution, and the Pi-hole web UI. Tries a soft fix first (restart networking / restart `pihole-FTL`), and only reboots if that doesn't recover it |
 | **Reboot cooldown** | Won't reboot more than once per 30 minutes, so a persistent problem doesn't cause a reboot loop — it logs and waits instead |
 | **Log rotation** | Keeps `/var/log/network-watchdog.log` from growing unbounded |
+| **Health alerts** | Alert-only checks a reboot can't fix: read-only SD card, low disk, under-voltage/thermal throttling, and "FTL up but upstream DNS dead" |
+| **Notifications** | Optional push (ntfy/Slack/webhook/email) whenever it takes action, plus an optional heartbeat so you're told if the watchdog itself stops running |
+| **Hardware watchdog** | Optional (`--enable-hw-watchdog`): the SoC resets the Pi on a total kernel hang that cron can no longer detect |
 
 ## Requirements
 
@@ -34,6 +37,11 @@ The installer (`install.sh`) will:
 3. Detect your WiFi interface and disable power management on it (skipped on Ethernet-only setups)
 4. Add the watchdog cron job
 5. Set up log rotation
+
+Pass `--enable-hw-watchdog` to also turn on the SoC hardware watchdog (systemd `RuntimeWatchdogSec` + `dtparam=watchdog=on`), which recovers the Pi from a full kernel lock-up that the cron-based watchdog can't catch. It takes effect after one reboot:
+```bash
+sudo ./setup.sh --enable-hw-watchdog
+```
 
 It's idempotent — safe to re-run `setup.sh` any time you want to reinstall, update, or re-verify.
 
@@ -85,6 +93,11 @@ Every 10 minutes:
      No to either -> restart pihole-FTL, recheck
                     still no -> reboot (if not in cooldown)
   Otherwise -> log OK, exit
+
+Alongside every run (alert-only, never reboots):
+  - read-only rootfs / low disk  -> notify (SD card failing)
+  - under-voltage / throttling    -> notify (bad PSU / cooling)
+  - upstream DNS dead but FTL up   -> notify (internet/forwarders down)
 ```
 
 Reboots are capped to once per 30 minutes. If the watchdog is still failing after a reboot and hits the cooldown again, it logs the failure instead of rebooting again — check `/var/log/network-watchdog.log` if you notice repeated failures, since that points to a deeper issue (bad SD card, failing power supply, etc.) rather than something this script can fix on its own.
@@ -94,9 +107,22 @@ Reboots are capped to once per 30 minutes. If the watchdog is still failing afte
 Settings live in `/etc/network-watchdog.conf` — edit that file (not the script), and your changes survive reinstalls:
 
 ```bash
-REBOOT_COOLDOWN=1800      # minimum seconds between reboots (default 1800 = 30 min)
-TEST_DOMAIN="google.com"  # domain used for the DNS check
+# Core
+REBOOT_COOLDOWN=1800          # minimum seconds between reboots (default 1800 = 30 min)
+TEST_DOMAIN="google.com"      # domain used for the DNS check
+
+# Alert-only health checks (never reboot)
+DISK_WARN_PCT=90              # warn when / usage reaches this percent
+ENABLE_UPSTREAM_CHECK=true    # detect "FTL up but upstream DNS dead"
+
+# Notifications (optional) - $MSG holds the message
+NOTIFY_CMD='curl -s -d "$MSG" https://ntfy.sh/YOUR-TOPIC'
+
+# Dead-man's switch (optional) - pinged after every healthy run
+HEARTBEAT_URL='https://hc-ping.com/YOUR-UUID'
 ```
+
+`NOTIFY_CMD` fires whenever the watchdog restarts something, reboots, or detects a problem it can't fix (read-only SD card, low disk, throttling, dead upstream). `HEARTBEAT_URL` is pinged only on a completed healthy run — a reboot exits before the ping, so a monitor like healthchecks.io alerts you when the Pi (or the watchdog) goes quiet. See the config file for ntfy/Slack/email examples.
 
 Edit your crontab (`sudo crontab -e`) to change the watchdog's schedule (default: every 10 minutes).
 

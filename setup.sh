@@ -3,9 +3,10 @@
 # https://github.com/Alghofaily/pihole-watchdog
 #
 # Runs chmod + install.sh + verify.sh in one go.
+# Any options (e.g. --enable-hw-watchdog) are passed through to install.sh.
 #
 # Usage:
-#   sudo ./setup.sh
+#   sudo ./setup.sh [--enable-hw-watchdog]
 
 set -e
 
@@ -23,7 +24,7 @@ echo "  Done"
 echo
 
 echo "=== Step 2: Running installer ==="
-./install.sh
+./install.sh "$@"
 echo
 
 echo "=== Step 3: Running verification ==="
