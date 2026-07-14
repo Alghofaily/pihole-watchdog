@@ -8,7 +8,6 @@ Built after chasing down exactly this problem on a Pi Zero 2 W: Pi-hole would fr
 
 | Component | What it does |
 |---|---|
-| **Daily restart** | Restarts `pihole-FTL` every day at 3:00 AM (cron) |
 | **WiFi power-save fix** | Disables WiFi power management on boot via systemd — the most common cause of a Pi silently dropping off the network (skipped automatically if you're on Ethernet) |
 | **Tiered watchdog** | Runs every 10 minutes. Checks gateway reachability, DNS resolution, and the Pi-hole web UI. Tries a soft fix first (restart networking / restart `pihole-FTL`), and only reboots if that doesn't recover it |
 | **Reboot cooldown** | Won't reboot more than once per 30 minutes, so a persistent problem doesn't cause a reboot loop — it logs and waits instead |
@@ -31,7 +30,7 @@ The installer will:
 1. Install any missing dependencies (`dnsutils`, `iputils-ping`, `wireless-tools`)
 2. Install the watchdog script to `/usr/local/bin/network-watchdog.sh`
 3. Detect your WiFi interface and disable power management on it (skipped on Ethernet-only setups)
-4. Add the two cron jobs
+4. Add the watchdog cron job
 5. Set up log rotation
 
 It's idempotent — safe to re-run if you want to reinstall or update.
@@ -81,7 +80,7 @@ Edit `/usr/local/bin/network-watchdog.sh` directly to adjust:
 - `REBOOT_COOLDOWN` — minimum seconds between reboots (default 1800 = 30 min)
 - `TEST_DOMAIN` — domain used for the DNS check (default `google.com`)
 
-Edit your crontab (`sudo crontab -e`) to change the schedule (default: every 10 minutes for the watchdog, 3 AM for the daily restart).
+Edit your crontab (`sudo crontab -e`) to change the watchdog's schedule (default: every 10 minutes).
 
 ## Why this exists
 

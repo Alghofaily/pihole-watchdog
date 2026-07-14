@@ -3,10 +3,9 @@
 # https://github.com/YOUR_USERNAME/pihole-watchdog
 #
 # Sets up:
-#   1. Daily 3 AM restart of pihole-FTL (cron)
-#   2. WiFi power management disabled on boot (systemd) - skipped on Ethernet
-#   3. Tiered network/DNS watchdog every 10 min (cron)
-#   4. Log rotation for the watchdog log
+#   1. WiFi power management disabled on boot (systemd) - skipped on Ethernet
+#   2. Tiered network/DNS/web UI watchdog every 10 min (cron)
+#   3. Log rotation for the watchdog log
 #
 # Usage:
 #   sudo ./install.sh
@@ -77,15 +76,13 @@ TMP_CRON=$(mktemp)
 crontab -l 2>/dev/null | grep -v "$CRON_MARKER" > "$TMP_CRON" || true
 
 {
-    echo "0 3 * * * systemctl restart pihole-FTL $CRON_MARKER (daily restart)"
     echo "*/10 * * * * /usr/local/bin/network-watchdog.sh $CRON_MARKER (watchdog)"
 } >> "$TMP_CRON"
 
 crontab "$TMP_CRON"
 rm -f "$TMP_CRON"
 echo "  Cron jobs installed:"
-echo "    - Daily pihole-FTL restart at 3:00 AM"
-echo "    - Network/DNS watchdog every 10 minutes"
+echo "    - Network/DNS/web UI watchdog every 10 minutes"
 echo
 
 # --- Done ---
