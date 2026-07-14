@@ -45,9 +45,10 @@ Removes the cron jobs, the watchdog script, the WiFi power-save service, and log
 
 ## Checking it's working
 
+Quick spot-check:
 ```bash
 # View scheduled jobs
-crontab -l
+sudo crontab -l
 
 # Watch the watchdog in real time
 tail -f /var/log/network-watchdog.log
@@ -57,6 +58,11 @@ iwconfig wlan0 | grep "Power Management"
 
 # Confirm the systemd service is enabled
 systemctl status wifi-powersave-off.service
+```
+
+For a full automated verification (pass/fail report across every component), run:
+```bash
+sudo ./verify.sh
 ```
 
 ## How the watchdog escalates

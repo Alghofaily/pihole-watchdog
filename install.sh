@@ -102,3 +102,4 @@ echo "  - systemctl status wifi-powersave-off.service"
 fi
 echo
 echo "To uninstall, run: sudo ./uninstall.sh"
+echo "To re-verify at any time, run: sudo ./verify.sh"
