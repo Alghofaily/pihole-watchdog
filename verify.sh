@@ -6,11 +6,47 @@
 # and working correctly. Safe to re-run any time.
 #
 # Usage:
-#   sudo ./verify.sh
+#   sudo ./verify.sh              Run all checks now
+#   sudo ./verify.sh --reboot     Reboot, then auto-run verification once
+#                                 the Pi is back up (result saved to
+#                                 /var/log/pihole-watchdog-postboot-verify.log)
 
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root: sudo ./verify.sh"
     exit 1
+fi
+
+POSTBOOT_LOG="/var/log/pihole-watchdog-postboot-verify.log"
+POSTBOOT_UNIT="/etc/systemd/system/pihole-watchdog-postboot-verify.service"
+SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
+if [ "$1" = "--reboot" ]; then
+    echo "Scheduling a one-time post-boot verification, then rebooting..."
+
+    cat > "$POSTBOOT_UNIT" << EOF
+[Unit]
+Description=One-time post-boot verification for pihole-watchdog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '$SCRIPT_PATH > $POSTBOOT_LOG 2>&1'
+ExecStartPost=/bin/systemctl disable pihole-watchdog-postboot-verify.service
+ExecStartPost=/bin/rm -f $POSTBOOT_UNIT
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable pihole-watchdog-postboot-verify.service >/dev/null 2>&1
+
+    echo "Rebooting now. After it comes back up, check the result with:"
+    echo "  cat $POSTBOOT_LOG"
+    sleep 2
+    reboot
+    exit 0
 fi
 
 PASS=0
@@ -140,7 +176,7 @@ else
 fi
 
 echo
-echo "Tip: for the most reliable confirmation, reboot the Pi and run this script again:"
-echo "  sudo reboot"
-echo "  # after it comes back up:"
-echo "  sudo ./verify.sh"
+echo "Tip: for the most reliable confirmation, run the automated reboot test:"
+echo "  sudo ./verify.sh --reboot"
+echo "  # after it comes back up, check the result with:"
+echo "  cat /var/log/pihole-watchdog-postboot-verify.log"
