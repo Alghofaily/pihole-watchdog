@@ -27,7 +27,7 @@ echo
 # --- Dependency check ---
 echo "[1/5] Checking dependencies..."
 MISSING=0
-for cmd in dig ping iwconfig; do
+for cmd in dig ping iwconfig curl; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "  Missing: $cmd"
         MISSING=1
@@ -37,7 +37,7 @@ done
 if [ "$MISSING" -eq 1 ]; then
     echo "  Installing missing packages (dnsutils, iputils-ping, wireless-tools)..."
     apt-get update -qq
-    apt-get install -y -qq dnsutils iputils-ping wireless-tools
+    apt-get install -y -qq dnsutils iputils-ping wireless-tools curl
 fi
 echo "  OK"
 echo

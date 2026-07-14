@@ -10,7 +10,7 @@ Built after chasing down exactly this problem on a Pi Zero 2 W: Pi-hole would fr
 |---|---|
 | **Daily restart** | Restarts `pihole-FTL` every day at 3:00 AM (cron) |
 | **WiFi power-save fix** | Disables WiFi power management on boot via systemd — the most common cause of a Pi silently dropping off the network (skipped automatically if you're on Ethernet) |
-| **Tiered watchdog** | Runs every 10 minutes. Checks gateway reachability and DNS resolution. Tries a soft fix first (restart networking / restart `pihole-FTL`), and only reboots if that doesn't recover it |
+| **Tiered watchdog** | Runs every 10 minutes. Checks gateway reachability, DNS resolution, and the Pi-hole web UI. Tries a soft fix first (restart networking / restart `pihole-FTL`), and only reboots if that doesn't recover it |
 | **Reboot cooldown** | Won't reboot more than once per 30 minutes, so a persistent problem doesn't cause a reboot loop — it logs and waits instead |
 | **Log rotation** | Keeps `/var/log/network-watchdog.log` from growing unbounded |
 
@@ -67,9 +67,9 @@ Every 10 minutes:
   1. Can we reach the gateway?
      No  -> restart networking, recheck
            still no -> reboot (if not in cooldown)
-  2. Can we resolve DNS via Pi-hole (127.0.0.1)?
-     No  -> restart pihole-FTL, recheck
-           still no -> reboot (if not in cooldown)
+  2. Can we resolve DNS via Pi-hole (127.0.0.1) AND reach the web UI?
+     No to either -> restart pihole-FTL, recheck
+                    still no -> reboot (if not in cooldown)
   Otherwise -> log OK, exit
 ```
 

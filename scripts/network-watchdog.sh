@@ -1,8 +1,8 @@
 #!/bin/bash
-# Tiered network/DNS watchdog for Pi-hole
+# Tiered network/DNS/web UI watchdog for Pi-hole
 #
 # 1. Check gateway -> if unreachable, restart networking, recheck
-# 2. Check DNS -> if broken, restart pihole-FTL, recheck
+# 2. Check DNS and web UI -> if either is broken, restart pihole-FTL, recheck
 # 3. If still broken after soft fixes, reboot (with cooldown to prevent reboot loops)
 #
 # Part of: https://github.com/alghofaily/pihole-watchdog
@@ -23,6 +23,10 @@ check_gateway() {
 
 check_dns() {
     dig +short +time=5 +tries=1 "$TEST_DOMAIN" @127.0.0.1 > /dev/null 2>&1
+}
+
+check_webui() {
+    curl -sf --max-time 5 -o /dev/null http://localhost/admin
 }
 
 can_reboot() {
@@ -67,23 +71,40 @@ if ! check_gateway; then
     fi
 fi
 
-# --- Step 2: DNS check (only meaningful if gateway is up) ---
-if ! check_dns; then
-    log "DNS resolution failed. Attempting to restart pihole-FTL."
+# --- Step 2: DNS + web UI check (only meaningful if gateway is up) ---
+DNS_OK=true
+WEBUI_OK=true
+check_dns || DNS_OK=false
+check_webui || WEBUI_OK=false
+
+if [ "$DNS_OK" = false ] || [ "$WEBUI_OK" = false ]; then
+    REASON=""
+    [ "$DNS_OK" = false ] && REASON="DNS not responding"
+    if [ "$WEBUI_OK" = false ]; then
+        if [ -n "$REASON" ]; then
+            REASON="$REASON and web UI unresponsive"
+        else
+            REASON="web UI unresponsive"
+        fi
+    fi
+    log "$REASON. Attempting to restart pihole-FTL."
     systemctl restart pihole-FTL
     sleep 15
 
-    if ! check_dns; then
-        log "DNS still failing after pihole-FTL restart."
+    check_dns && DNS_OK=true || DNS_OK=false
+    check_webui && WEBUI_OK=true || WEBUI_OK=false
+
+    if [ "$DNS_OK" = false ] || [ "$WEBUI_OK" = false ]; then
+        log "Still failing after pihole-FTL restart ($REASON)."
         if ! check_gateway; then
             log "Gateway also down on recheck."
         fi
         do_reboot
         exit 0
     else
-        log "DNS recovered after pihole-FTL restart. No reboot needed."
+        log "Recovered after pihole-FTL restart. No reboot needed."
     fi
 fi
 
-log "Network and DNS OK."
+log "Network, DNS, and web UI all OK."
 exit 0
