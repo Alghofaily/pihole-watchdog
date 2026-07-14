@@ -53,9 +53,23 @@ PASS=0
 FAIL=0
 WARN=0
 
-ok()   { echo "  [PASS] $1"; PASS=$((PASS+1)); }
-bad()  { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); }
-warn() { echo "  [WARN] $1"; WARN=$((WARN+1)); }
+if [ -t 1 ]; then
+    GREEN='\033[0;32m'
+    RED='\033[0;31m'
+    YELLOW='\033[0;33m'
+    BOLD='\033[1m'
+    RESET='\033[0m'
+else
+    GREEN=''
+    RED=''
+    YELLOW=''
+    BOLD=''
+    RESET=''
+fi
+
+ok()   { echo -e "  ${GREEN}[PASS]${RESET} $1"; PASS=$((PASS+1)); }
+bad()  { echo -e "  ${RED}[FAIL]${RESET} $1"; FAIL=$((FAIL+1)); }
+warn() { echo -e "  ${YELLOW}[WARN]${RESET} $1"; WARN=$((WARN+1)); }
 
 echo "=== Pi-hole Watchdog Verification ==="
 echo
@@ -161,18 +175,18 @@ fi
 echo
 
 # --- Summary ---
-echo "=== Summary ==="
-echo "  Passed:  $PASS"
-echo "  Warnings: $WARN"
-echo "  Failed:  $FAIL"
+echo -e "${BOLD}=== Summary ===${RESET}"
+echo -e "  ${GREEN}Passed:${RESET}   $PASS"
+echo -e "  ${YELLOW}Warnings:${RESET} $WARN"
+echo -e "  ${RED}Failed:${RESET}   $FAIL"
 echo
 
 if [ "$FAIL" -eq 0 ] && [ "$WARN" -eq 0 ]; then
-    echo "Everything looks good."
+    echo -e "${GREEN}Everything looks good.${RESET}"
 elif [ "$FAIL" -eq 0 ]; then
-    echo "No failures, but some warnings above are worth a look."
+    echo -e "${YELLOW}No failures, but some warnings above are worth a look.${RESET}"
 else
-    echo "One or more checks failed. Review the [FAIL] lines above and re-run 'sudo ./install.sh' if needed."
+    echo -e "${RED}One or more checks failed.${RESET} Review the [FAIL] lines above and re-run 'sudo ./install.sh' if needed."
 fi
 
 echo
