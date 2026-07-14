@@ -29,7 +29,7 @@ sudo ./setup.sh
 `setup.sh` handles everything in one command: sets executable permissions, runs the installer, and runs verification at the end so you immediately see a pass/fail report.
 
 The installer (`install.sh`) will:
-1. Install any missing dependencies (`dnsutils`, `iputils-ping`, `wireless-tools`, `curl`)
+1. Install any missing dependencies (`dnsutils`, `iputils-ping`, `wireless-tools`, `iw`, `curl`, `logrotate`)
 2. Install the watchdog script to `/usr/local/bin/network-watchdog.sh`
 3. Detect your WiFi interface and disable power management on it (skipped on Ethernet-only setups)
 4. Add the watchdog cron job
@@ -91,11 +91,23 @@ Reboots are capped to once per 30 minutes. If the watchdog is still failing afte
 
 ## Configuration
 
-Edit `/usr/local/bin/network-watchdog.sh` directly to adjust:
-- `REBOOT_COOLDOWN` — minimum seconds between reboots (default 1800 = 30 min)
-- `TEST_DOMAIN` — domain used for the DNS check (default `google.com`)
+Settings live in `/etc/network-watchdog.conf` — edit that file (not the script), and your changes survive reinstalls:
+
+```bash
+REBOOT_COOLDOWN=1800      # minimum seconds between reboots (default 1800 = 30 min)
+TEST_DOMAIN="google.com"  # domain used for the DNS check
+```
 
 Edit your crontab (`sudo crontab -e`) to change the watchdog's schedule (default: every 10 minutes).
+
+## Development
+
+Every script is linted with [ShellCheck](https://www.shellcheck.net/) and the escalation logic is covered by a [bats](https://github.com/bats-core/bats-core) test suite (`tests/`), both run on every push via GitHub Actions. To run them locally:
+
+```bash
+shellcheck -s bash *.sh scripts/network-watchdog.sh
+bats tests/
+```
 
 ## Why this exists
 

@@ -5,7 +5,9 @@ After=network.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/sbin/iwconfig WIFI_INTERFACE_PLACEHOLDER power off
+# Prefer the modern `iw` tool; fall back to the deprecated `iwconfig` if `iw`
+# can't set it (some older drivers only respond to iwconfig).
+ExecStart=/bin/sh -c '/usr/sbin/iw dev WIFI_INTERFACE_PLACEHOLDER set power_save off || /usr/sbin/iwconfig WIFI_INTERFACE_PLACEHOLDER power off'
 
 [Install]
 WantedBy=multi-user.target

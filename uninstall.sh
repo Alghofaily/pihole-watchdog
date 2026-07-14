@@ -27,6 +27,11 @@ echo "Removing logrotate config..."
 rm -f /etc/logrotate.d/network-watchdog
 echo "  Done"
 
+echo "Removing config and state..."
+rm -f /etc/network-watchdog.conf
+rm -rf /var/lib/network-watchdog
+echo "  Done"
+
 if [ -f /etc/systemd/system/wifi-powersave-off.service ]; then
     echo "Removing WiFi power management service..."
     systemctl disable wifi-powersave-off.service >/dev/null 2>&1 || true

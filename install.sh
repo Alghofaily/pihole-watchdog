@@ -1,6 +1,6 @@
 #!/bin/bash
 # Pi-hole Watchdog - installer
-# https://github.com/YOUR_USERNAME/pihole-watchdog
+# https://github.com/Alghofaily/pihole-watchdog
 #
 # Sets up:
 #   1. WiFi power management disabled on boot (systemd) - skipped on Ethernet
@@ -24,19 +24,33 @@ echo "=== Pi-hole Watchdog Installer ==="
 echo
 
 # --- Dependency check ---
+# Map each required command to the apt package that provides it, so we install
+# exactly what's missing. `iw` (interface detection + powersave) and `logrotate`
+# are required too and were previously assumed to be present.
 echo "[1/5] Checking dependencies..."
-MISSING=0
-for cmd in dig ping iwconfig curl; do
+declare -A PKG_FOR=(
+    [dig]=dnsutils
+    [ping]=iputils-ping
+    [iwconfig]=wireless-tools
+    [iw]=iw
+    [curl]=curl
+    [logrotate]=logrotate
+)
+MISSING_PKGS=""
+for cmd in "${!PKG_FOR[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo "  Missing: $cmd"
-        MISSING=1
+        echo "  Missing: $cmd (package: ${PKG_FOR[$cmd]})"
+        MISSING_PKGS="$MISSING_PKGS ${PKG_FOR[$cmd]}"
     fi
 done
 
-if [ "$MISSING" -eq 1 ]; then
-    echo "  Installing missing packages (dnsutils, iputils-ping, wireless-tools)..."
+if [ -n "$MISSING_PKGS" ]; then
+    # De-duplicate package names.
+    MISSING_PKGS=$(echo "$MISSING_PKGS" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+    echo "  Installing missing packages:$MISSING_PKGS"
     apt-get update -qq
-    apt-get install -y -qq dnsutils iputils-ping wireless-tools curl
+    # shellcheck disable=SC2086
+    apt-get install -y -qq $MISSING_PKGS
 fi
 echo "  OK"
 echo
@@ -45,6 +59,19 @@ echo
 echo "[2/5] Installing network watchdog script..."
 install -m 755 "$SCRIPT_DIR/scripts/network-watchdog.sh" /usr/local/bin/network-watchdog.sh
 echo "  Installed to /usr/local/bin/network-watchdog.sh"
+
+# Persistent state directory for the reboot cooldown (survives reboots).
+install -d -m 755 /var/lib/network-watchdog
+echo "  State directory ready at /var/lib/network-watchdog"
+
+# Install a default config file only if the user doesn't already have one,
+# so their tuned settings survive reinstalls.
+if [ ! -f /etc/network-watchdog.conf ]; then
+    install -m 644 "$SCRIPT_DIR/scripts/network-watchdog.conf" /etc/network-watchdog.conf
+    echo "  Default config installed at /etc/network-watchdog.conf"
+else
+    echo "  Existing /etc/network-watchdog.conf left untouched"
+fi
 echo
 
 # --- Install log rotation ---
