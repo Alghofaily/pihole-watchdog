@@ -1,0 +1,8 @@
+[Unit]
+Description=Pi-hole Watchdog (network/DNS/web UI health check + recovery)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/network-watchdog.sh
