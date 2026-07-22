@@ -74,18 +74,31 @@ warn() { echo -e "  ${YELLOW}[WARN]${RESET} $1"; WARN=$((WARN+1)); }
 echo "=== Pi-hole Watchdog Verification ==="
 echo
 
-# --- 1. Crontab ---
-echo "[1/6] Checking crontab..."
+# --- 1. Scheduling (cron or systemd timer) ---
+echo "[1/6] Checking scheduling..."
 CRON_LINE=$(crontab -l 2>/dev/null | grep "network-watchdog.sh" | grep "pihole-watchdog")
+TIMER_ACTIVE=""
+if systemctl is-enabled network-watchdog.timer >/dev/null 2>&1; then
+    TIMER_ACTIVE=yes
+fi
 if [ -n "$CRON_LINE" ]; then
     ok "Watchdog cron job is present"
+elif [ -n "$TIMER_ACTIVE" ]; then
+    ok "Watchdog systemd timer (network-watchdog.timer) is enabled"
 else
-    bad "Watchdog cron job NOT found (expected a line with network-watchdog.sh and the pihole-watchdog tag)"
+    bad "No watchdog schedule found (expected a pihole-watchdog cron line or an enabled network-watchdog.timer)"
 fi
 
 STALE_LINES=$(crontab -l 2>/dev/null | grep -v "^#" | grep -v "pihole-watchdog" | grep -E "pihole|network-watchdog" || true)
 if [ -n "$STALE_LINES" ]; then
     warn "Found other pihole/network-related cron lines not tagged by this project - review with 'sudo crontab -l'"
+fi
+
+# Config file present so tuning survives reinstalls.
+if [ -f /etc/network-watchdog.conf ]; then
+    ok "Config file present at /etc/network-watchdog.conf"
+else
+    warn "No /etc/network-watchdog.conf - the watchdog runs on built-in defaults (re-run install.sh to add one)"
 fi
 echo
 

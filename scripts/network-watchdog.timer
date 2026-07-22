@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Pi-hole Watchdog every 10 minutes
+
+[Timer]
+# First run shortly after boot, then every 10 minutes. Persistent so a missed
+# run (e.g. the Pi was asleep/off) fires as soon as it's back.
+OnBootSec=2min
+OnUnitActiveSec=10min
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
